@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Categorías de productos (Carnes, Verduras, Aseo, etc.)
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+
+  @@index([name])
+}
+
+// Alérgenos (Gluten, Lactosa, Frutos secos, etc.)
+model Allergen {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  code        String?           @unique // Código estándar (ej: "GLU" para gluten)
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  products    ProductAllergen[]
+
+  @@index([name])
+  @@index([code])
+}
+
+// Catálogo maestro de productos
+model Product {
+  id          String    @id @default(cuid())
+  name        String    // "Tomate Raf", "Lejía", "Salmón"
+  eanCode     String?   @unique // Código de barras EAN
+  description String?
+  categoryId  String
+  unit        String?   // "kg", "litro", "unidad"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  category    Category           @relation(fields: [categoryId], references: [id])
+  allergens   ProductAllergen[]
+
+  @@index([categoryId])
+  @@index([name])
+  @@index([eanCode])
+}
+
+// Relación N:N entre Productos y Alérgenos
+model ProductAllergen {
+  id         String   @id @default(cuid())
+  productId  String
+  allergenId String
+  createdAt  DateTime @default(now())
+
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  allergen   Allergen @relation(fields: [allergenId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, allergenId])
+  @@index([productId])
+  @@index([allergenId])
+}
