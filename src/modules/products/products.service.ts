@@ -172,6 +172,112 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
     }
   }
 
+  /**
+   * Busca un producto por nombre o EAN, si no existe lo crea
+   * Este método es usado por el flujo de análisis de facturas
+   */
+  async findOrCreate(data: { name: string; eanCode?: string; categoryName?: string }) {
+    try {
+      const { name, eanCode, categoryName } = data;
+
+      // 1. Buscar por EAN si se proporciona
+      if (eanCode) {
+        const productByEan = await this.product.findFirst({
+          where: { eanCode },
+          include: {
+            category: true,
+            allergens: {
+              include: {
+                allergen: true,
+              },
+            },
+          },
+        });
+
+        if (productByEan) {
+          this.logger.log(`✅ Product found by EAN: ${eanCode}`);
+          return this.formatProduct(productByEan);
+        }
+      }
+
+      // 2. Buscar por nombre exacto (insensitive)
+      const productByName = await this.product.findFirst({
+        where: {
+          name: {
+            equals: name,
+            mode: 'insensitive',
+          },
+        },
+        include: {
+          category: true,
+          allergens: {
+            include: {
+              allergen: true,
+            },
+          },
+        },
+      });
+
+      if (productByName) {
+        this.logger.log(`✅ Product found by name: ${name}`);
+        return this.formatProduct(productByName);
+      }
+
+      // 3. Si no existe, crear el producto
+      this.logger.log(`🆕 Creating new product: ${name}`);
+
+      // Buscar o usar categoría "Otros" por defecto
+      let categoryId: string | undefined;
+      
+      if (categoryName) {
+        const category = await this.category.findFirst({
+          where: {
+            name: {
+              contains: categoryName,
+              mode: 'insensitive',
+            },
+          },
+        });
+        categoryId = category?.id;
+      }
+
+      // Si no se encuentra categoría, buscar "Otros"
+      if (!categoryId) {
+        const defaultCategory = await this.category.findFirst({
+          where: {
+            name: {
+              equals: 'Otros',
+              mode: 'insensitive',
+            },
+          },
+        });
+        categoryId = defaultCategory?.id;
+      }
+
+      const newProduct = await this.product.create({
+        data: {
+          name,
+          eanCode: eanCode || undefined,
+          categoryId,
+          unit: 'Unidad', // Unidad por defecto
+        },
+        include: {
+          category: true,
+          allergens: {
+            include: {
+              allergen: true,
+            },
+          },
+        },
+      });
+
+      this.logger.log(`✅ Product created: ${newProduct.id}`);
+      return this.formatProduct(newProduct);
+    } catch (error) {
+      throw RpcExceptionHandler.handle(error);
+    }
+  }
+
   health() {
     return {
       status: 'ok',

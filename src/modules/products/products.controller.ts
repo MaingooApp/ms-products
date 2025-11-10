@@ -34,6 +34,11 @@ export class ProductsController {
     return this.productsService.remove(data.id);
   }
 
+  @MessagePattern(ProductsSubjects.findOrCreate)
+  findOrCreate(@Payload() data: { name: string; eanCode?: string; categoryName?: string }) {
+    return this.productsService.findOrCreate(data);
+  }
+
   @MessagePattern(ProductsSubjects.health)
   health() {
     return this.productsService.health();

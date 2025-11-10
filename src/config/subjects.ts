@@ -6,6 +6,7 @@ export enum ProductsSubjects {
   update = 'products.update',
   delete = 'products.delete',
   search = 'products.search',
+  findOrCreate = 'products.findOrCreate',
 
   // Categories
   createCategory = 'categories.create',
