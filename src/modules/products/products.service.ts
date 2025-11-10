@@ -4,10 +4,15 @@ import { PrismaClient } from '@prisma/client';
 
 import { RpcExceptionHandler } from 'src/common';
 import { CreateProductDto, UpdateProductDto, FindAllProductsDto, FindOneProductDto } from './dto';
+import { OpenAiService } from './openai.service';
 
 @Injectable()
 export class ProductsService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ProductsService.name);
+
+  constructor(private readonly openAiService: OpenAiService) {
+    super();
+  }
 
   async onModuleInit() {
     await this.$connect();
@@ -226,9 +231,33 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
       // 3. Si no existe, crear el producto
       this.logger.log(`🆕 Creating new product: ${name}`);
 
+      // Identificar alérgenos automáticamente con OpenAI
+      let allergenIds: string[] = [];
+      if (this.openAiService) {
+        const allergenResult = await this.openAiService.identifyAllergens(name);
+
+        if (allergenResult.allergenCodes.length > 0) {
+          // Buscar los IDs de los alérgenos identificados
+          const allergens = await this.allergen.findMany({
+            where: {
+              code: {
+                in: allergenResult.allergenCodes,
+              },
+            },
+            select: { id: true, code: true },
+          });
+
+          allergenIds = allergens.map((a) => a.id);
+
+          this.logger.log(
+            `🏷️  Auto-detected allergens (${allergenResult.confidence}): ${allergenResult.allergenCodes.join(', ')} - ${allergenResult.reasoning}`,
+          );
+        }
+      }
+
       // Buscar o usar categoría "Otros" por defecto
       let categoryId: string | undefined;
-      
+
       if (categoryName) {
         const category = await this.category.findFirst({
           where: {
@@ -260,6 +289,14 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
           eanCode: eanCode || undefined,
           categoryId,
           unit: 'Unidad', // Unidad por defecto
+          allergens:
+            allergenIds.length > 0
+              ? {
+                  create: allergenIds.map((allergenId) => ({
+                    allergenId,
+                  })),
+                }
+              : undefined,
         },
         include: {
           category: true,
@@ -271,8 +308,41 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
         },
       });
 
-      this.logger.log(`✅ Product created: ${newProduct.id}`);
+      this.logger.log(`✅ Product created: ${newProduct.id} with ${allergenIds.length} allergens`);
       return this.formatProduct(newProduct);
+    } catch (error) {
+      throw RpcExceptionHandler.handle(error);
+    }
+  }
+
+  /**
+   * Identificar alérgenos para una descripción de producto
+   * Método público para ser llamado desde otros servicios
+   */
+  async identifyAllergensForProduct(description: string) {
+    try {
+      const result = await this.openAiService.identifyAllergens(description);
+
+      // Obtener información completa de los alérgenos identificados
+      const allergens = await this.allergen.findMany({
+        where: {
+          code: {
+            in: result.allergenCodes,
+          },
+        },
+      });
+
+      return {
+        allergenCodes: result.allergenCodes,
+        allergens: allergens.map((a) => ({
+          id: a.id,
+          name: a.name,
+          code: a.code,
+          description: a.description,
+        })),
+        confidence: result.confidence,
+        reasoning: result.reasoning,
+      };
     } catch (error) {
       throw RpcExceptionHandler.handle(error);
     }

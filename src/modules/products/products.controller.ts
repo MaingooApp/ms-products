@@ -39,6 +39,11 @@ export class ProductsController {
     return this.productsService.findOrCreate(data);
   }
 
+  @MessagePattern(ProductsSubjects.identifyAllergens)
+  identifyAllergens(@Payload() data: { description: string }) {
+    return this.productsService.identifyAllergensForProduct(data.description);
+  }
+
   @MessagePattern(ProductsSubjects.health)
   health() {
     return this.productsService.health();
