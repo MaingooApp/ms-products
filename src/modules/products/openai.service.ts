@@ -18,6 +18,7 @@ export class OpenAiService {
     if (envs.openAiApiKey) {
       this.client = new OpenAI({
         apiKey: envs.openAiApiKey,
+        baseURL: envs.baseURL,
         timeout: 30000,
       });
       this.logger.log('✅ OpenAI client initialized for allergen detection');

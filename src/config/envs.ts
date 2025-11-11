@@ -6,6 +6,7 @@ interface EnvVars {
   NATS_SERVERS: string[];
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
+  BASE_URL?: string;
 }
 
 const envSchema = joi
@@ -13,7 +14,8 @@ const envSchema = joi
     PORT: joi.number().integer().positive().required(),
     NATS_SERVERS: joi.array().items(joi.string().uri()).min(1).required(),
     OPENAI_API_KEY: joi.string().optional(),
-    OPENAI_MODEL: joi.string().optional().default('gpt-4o-mini'),
+    BASE_URL: joi.string().optional(),
+    OPENAI_MODEL: joi.string().optional().default('gpt-4.1'),
   })
   .unknown(true);
 
@@ -32,5 +34,6 @@ export const envs = {
   port: envVars.PORT,
   natsServers: envVars.NATS_SERVERS,
   openAiApiKey: envVars.OPENAI_API_KEY,
-  openAiModel: envVars.OPENAI_MODEL || 'gpt-4o-mini',
+  openAiModel: envVars.OPENAI_MODEL || 'gpt-4.1',
+  baseURL: envVars.BASE_URL ,
 };
