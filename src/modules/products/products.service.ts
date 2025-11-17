@@ -255,33 +255,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
         }
       }
 
-      // Buscar o usar categoría "Otros" por defecto
-      let categoryId: string | undefined;
-
-      if (categoryName) {
-        const category = await this.category.findFirst({
-          where: {
-            name: {
-              contains: categoryName,
-              mode: 'insensitive',
-            },
-          },
-        });
-        categoryId = category?.id;
-      }
-
-      // Si no se encuentra categoría, buscar "Otros"
-      if (!categoryId) {
-        const defaultCategory = await this.category.findFirst({
-          where: {
-            name: {
-              equals: 'Otros',
-              mode: 'insensitive',
-            },
-          },
-        });
-        categoryId = defaultCategory?.id;
-      }
+      const categoryId = await this.resolveCategoryId(categoryName);
 
       const newProduct = await this.product.create({
         data: {
@@ -379,5 +353,59 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
       createdAt: product.createdAt.toISOString(),
       updatedAt: product.updatedAt.toISOString(),
     };
+  }
+
+  private async resolveCategoryId(categoryName?: string) {
+    const trimmedName = categoryName?.trim();
+
+    if (trimmedName) {
+      const existingCategory = await this.category.findFirst({
+        where: {
+          name: {
+            contains: trimmedName,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (existingCategory) {
+        return existingCategory.id;
+      }
+
+      const newCategory = await this.category.create({
+        data: {
+          name: trimmedName,
+          description: 'Categoría auto-creada desde el flujo de importación',
+        },
+      });
+
+      this.logger.log(`🆕 Auto-created category: ${newCategory.name} (${newCategory.id})`);
+      return newCategory.id;
+    }
+
+    const defaultCategory = await this.category.findFirst({
+      where: {
+        name: {
+          equals: 'Otros',
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (defaultCategory) {
+      return defaultCategory.id;
+    }
+
+    const createdDefault = await this.category.create({
+      data: {
+        name: 'Otros',
+        description: 'Categoría por defecto para productos sin clasificación',
+      },
+    });
+
+    this.logger.log(
+      `🆕 Auto-created default category: ${createdDefault.name} (${createdDefault.id})`,
+    );
+    return createdDefault.id;
   }
 }
