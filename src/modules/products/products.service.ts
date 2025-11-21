@@ -255,7 +255,21 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
         }
       }
 
-      const categoryId = await this.resolveCategoryId(categoryName);
+      // Obtener todas las categorías existentes
+      const categories = await this.category.findMany({ select: { name: true } });
+      let suggestedCategoryName = categoryName;
+      if (this.openAiService && categories.length > 0) {
+        const categoryNames = categories.map((c) => c.name);
+        const suggestion = await this.openAiService.suggestCategory(name, categoryNames);
+        if (suggestion.category && categoryNames.includes(suggestion.category)) {
+          suggestedCategoryName = suggestion.category;
+          this.logger.log(
+            `🏷️  Auto-suggested category (${suggestion.confidence}): ${suggestion.category} - ${suggestion.reasoning}`,
+          );
+        }
+      }
+
+      const categoryId = await this.resolveCategoryId(suggestedCategoryName);
 
       const newProduct = await this.product.create({
         data: {

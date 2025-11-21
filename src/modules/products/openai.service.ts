@@ -28,6 +28,102 @@ export class OpenAiService {
   }
 
   /**
+   * Sugiere la categoría más adecuada para un producto usando OpenAI
+   */
+  async suggestCategory(
+    productName: string,
+    categories: string[],
+  ): Promise<{ category: string; confidence: string; reasoning?: string }> {
+    if (!this.client) {
+      this.logger.warn('OpenAI not configured, skipping category suggestion');
+      return { category: '', confidence: 'low', reasoning: 'OpenAI not configured' };
+    }
+
+    if (!productName || categories.length === 0) {
+      return { category: '', confidence: 'low', reasoning: 'No product name or categories' };
+    }
+
+    try {
+      const prompt = `Eres un experto en clasificación de productos. Basado en el nombre del producto y la lista de categorías disponibles, sugiere la categoría más adecuada para el producto.\n\nNOMBRE DEL PRODUCTO: "${productName}"\nCATEGORÍAS DISPONIBLES: ${categories.map((c) => `"${c}"`).join(', ')}\n\nDevuelve un JSON con:\n- category: nombre exacto de la categoría sugerida (de la lista)\n- confidence: high, medium o low según certeza\n- reasoning: breve explicación (máx 100 caracteres)`;
+
+      const schema = {
+        type: 'object',
+        properties: {
+          category: { type: 'string', description: 'Nombre exacto de la categoría sugerida' },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          reasoning: { type: 'string' },
+        },
+        required: ['category', 'confidence', 'reasoning'],
+        additionalProperties: false,
+      };
+
+      const response = await this.client.responses.create({
+        model: envs.openAiModel,
+        input: [
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: prompt }],
+          },
+        ],
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'category_suggestion',
+            schema,
+            strict: true,
+          },
+        },
+        max_output_tokens: 200,
+      });
+
+      // Parse response
+      const output = response.output?.[0];
+      if (output && 'content' in output && Array.isArray(output.content)) {
+        for (const item of output.content) {
+          // output_text
+          if (item.type === 'output_text' && typeof item.text === 'string') {
+            try {
+              return JSON.parse(item.text) as {
+                category: string;
+                confidence: string;
+                reasoning?: string;
+              };
+            } catch (error) {
+              this.logger.debug('Failed to parse OpenAI category response', error as Error);
+            }
+          }
+          // refusal (no respuesta)
+          if (item.type === 'refusal') {
+            return { category: '', confidence: 'low', reasoning: 'OpenAI refused to answer' };
+          }
+        }
+      }
+      // fallback: try output.text if exists and is string
+      if (output && 'text' in output && typeof (output as any).text === 'string') {
+        try {
+          return JSON.parse((output as any).text) as {
+            category: string;
+            confidence: string;
+            reasoning?: string;
+          };
+        } catch (error) {
+          this.logger.debug(
+            'Failed to parse OpenAI category response (text fallback)',
+            error as Error,
+          );
+        }
+      }
+      return { category: '', confidence: 'low', reasoning: 'Failed to parse OpenAI response' };
+    } catch (error) {
+      this.logger.error(
+        `Error suggesting category for "${productName}":`,
+        (error as Error).message,
+      );
+      return { category: '', confidence: 'low', reasoning: `Error: ${(error as Error).message}` };
+    }
+  }
+
+  /**
    * Identifica alérgenos en la descripción de un producto usando OpenAI
    */
   async identifyAllergens(productDescription: string): Promise<AllergenIdentificationResult> {
