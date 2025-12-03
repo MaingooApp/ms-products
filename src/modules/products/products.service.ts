@@ -354,62 +354,91 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
   /**
    * Actualiza el stock de uno o varios productos
    * Usado por el flujo de análisis de documentos para actualizar inventario
+   * Utiliza transacciones para garantizar consistencia de datos
    */
   async updateStock(data: UpdateStockDto | UpdateStockDto[]) {
     try {
       const items = Array.isArray(data) ? data : [data];
-      const results: { productId: string; newStock: number; success: boolean; error?: string }[] =
-        [];
+
+      // 1. Obtener todos los productos en una sola consulta
+      const products = await this.product.findMany({
+        where: {
+          id: { in: items.map((item) => item.productId) },
+        },
+      });
+
+      const productMap = new Map(products.map((p) => [p.id, p]));
+
+      // 2. Separar items válidos de los que no tienen producto
+      const validItems: { item: UpdateStockDto; product: (typeof products)[0] }[] = [];
+      const missingResults: {
+        productId: string;
+        newStock: number;
+        success: boolean;
+        error?: string;
+      }[] = [];
 
       for (const item of items) {
-        try {
-          const product = await this.product.findUnique({
-            where: { id: item.productId },
-          });
-
-          if (!product) {
-            results.push({
-              productId: item.productId,
-              newStock: 0,
-              success: false,
-              error: 'Product not found',
-            });
-            continue;
-          }
-
-          const currentStock = product.stock.toNumber();
-          const newStock = Math.max(0, currentStock + item.quantity);
-
-          const updated = await this.product.update({
-            where: { id: item.productId },
-            data: {
-              stock: new Prisma.Decimal(newStock),
-            },
-          });
-
-          this.logger.log(
-            `📦 Stock updated for product ${item.productId}: ${currentStock} -> ${newStock} (${item.quantity > 0 ? '+' : ''}${item.quantity})`,
-          );
-
-          results.push({
-            productId: item.productId,
-            newStock: updated.stock.toNumber(),
-            success: true,
-          });
-        } catch (error) {
-          this.logger.error(`Failed to update stock for product ${item.productId}`, error);
-          results.push({
+        const product = productMap.get(item.productId);
+        if (product) {
+          validItems.push({ item, product });
+        } else {
+          missingResults.push({
             productId: item.productId,
             newStock: 0,
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: 'Product not found',
           });
         }
       }
 
+      // Si no hay items válidos, retornar solo los errores
+      if (validItems.length === 0) {
+        return {
+          success: false,
+          results: missingResults,
+        };
+      }
+
+      // 3. Preparar operaciones de actualización
+      const updateOps = validItems.map(({ item, product }) => {
+        const currentStock = product.stock.toNumber();
+        const newStock = Math.max(0, currentStock + item.quantity);
+
+        return this.product.update({
+          where: { id: item.productId },
+          data: {
+            stock: new Prisma.Decimal(newStock),
+          },
+        });
+      });
+
+      // 4. Ejecutar todas las actualizaciones en una transacción
+      const updatedProducts = await this.$transaction(updateOps);
+
+      // 5. Logging después de la transacción exitosa
+      const successResults = updatedProducts.map((updated, idx) => {
+        const { item, product } = validItems[idx];
+        const currentStock = product.stock.toNumber();
+        const newStock = updated.stock.toNumber();
+
+        this.logger.log(
+          `📦 Stock updated for product ${item.productId}: ${currentStock} -> ${newStock} (${item.quantity > 0 ? '+' : ''}${item.quantity})`,
+        );
+
+        return {
+          productId: updated.id,
+          newStock,
+          success: true,
+        };
+      });
+
+      // 6. Combinar resultados
+      const allResults = [...successResults, ...missingResults];
+
       return {
-        success: results.every((r) => r.success),
-        results,
+        success: missingResults.length === 0,
+        results: allResults,
       };
     } catch (error) {
       throw RpcExceptionHandler.handle(error);
