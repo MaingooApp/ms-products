@@ -3,7 +3,13 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 
 import { ProductsSubjects } from 'src/config';
 import { ProductsService } from './products.service';
-import { CreateProductDto, UpdateProductDto, FindAllProductsDto, FindOneProductDto } from './dto';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  FindAllProductsDto,
+  FindOneProductDto,
+  UpdateStockDto,
+} from './dto';
 
 @Controller()
 export class ProductsController {
@@ -42,6 +48,11 @@ export class ProductsController {
   @MessagePattern(ProductsSubjects.identifyAllergens)
   identifyAllergens(@Payload() data: { description: string }) {
     return this.productsService.identifyAllergensForProduct(data.description);
+  }
+
+  @MessagePattern(ProductsSubjects.updateStock)
+  updateStock(@Payload() data: UpdateStockDto | UpdateStockDto[]) {
+    return this.productsService.updateStock(data);
   }
 
   @MessagePattern(ProductsSubjects.health)

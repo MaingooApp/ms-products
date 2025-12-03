@@ -8,6 +8,7 @@ export enum ProductsSubjects {
   search = 'products.search',
   findOrCreate = 'products.findOrCreate',
   identifyAllergens = 'products.identifyAllergens',
+  updateStock = 'products.updateStock',
 
   // Categories
   createCategory = 'categories.create',

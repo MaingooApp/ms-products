@@ -1,9 +1,15 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 import { RpcExceptionHandler } from 'src/common';
-import { CreateProductDto, UpdateProductDto, FindAllProductsDto, FindOneProductDto } from './dto';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  FindAllProductsDto,
+  FindOneProductDto,
+  UpdateStockDto,
+} from './dto';
 import { OpenAiService } from './openai.service';
 
 @Injectable()
@@ -26,11 +32,12 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
 
   async create(data: CreateProductDto) {
     try {
-      const { allergenIds, ...productData } = data;
+      const { allergenIds, stock, ...productData } = data;
 
       const product = await this.product.create({
         data: {
           ...productData,
+          stock: stock ? new Prisma.Decimal(stock) : new Prisma.Decimal(0),
           allergens: allergenIds
             ? {
                 create: allergenIds.map((allergenId) => ({
@@ -128,7 +135,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
 
   async update(id: string, data: UpdateProductDto) {
     try {
-      const { allergenIds, ...productData } = data;
+      const { allergenIds, stock, ...productData } = data;
 
       // Si se proporcionan alérgenos, reemplazar los existentes
       if (allergenIds) {
@@ -141,6 +148,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
         where: { id },
         data: {
           ...productData,
+          stock: stock !== undefined ? new Prisma.Decimal(stock) : undefined,
           allergens: allergenIds
             ? {
                 create: allergenIds.map((allergenId) => ({
@@ -343,6 +351,71 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
     };
   }
 
+  /**
+   * Actualiza el stock de uno o varios productos
+   * Usado por el flujo de análisis de documentos para actualizar inventario
+   */
+  async updateStock(data: UpdateStockDto | UpdateStockDto[]) {
+    try {
+      const items = Array.isArray(data) ? data : [data];
+      const results: { productId: string; newStock: number; success: boolean; error?: string }[] =
+        [];
+
+      for (const item of items) {
+        try {
+          const product = await this.product.findUnique({
+            where: { id: item.productId },
+          });
+
+          if (!product) {
+            results.push({
+              productId: item.productId,
+              newStock: 0,
+              success: false,
+              error: 'Product not found',
+            });
+            continue;
+          }
+
+          const currentStock = product.stock.toNumber();
+          const newStock = Math.max(0, currentStock + item.quantity);
+
+          const updated = await this.product.update({
+            where: { id: item.productId },
+            data: {
+              stock: new Prisma.Decimal(newStock),
+            },
+          });
+
+          this.logger.log(
+            `📦 Stock updated for product ${item.productId}: ${currentStock} -> ${newStock} (${item.quantity > 0 ? '+' : ''}${item.quantity})`,
+          );
+
+          results.push({
+            productId: item.productId,
+            newStock: updated.stock.toNumber(),
+            success: true,
+          });
+        } catch (error) {
+          this.logger.error(`Failed to update stock for product ${item.productId}`, error);
+          results.push({
+            productId: item.productId,
+            newStock: 0,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+
+      return {
+        success: results.every((r) => r.success),
+        results,
+      };
+    } catch (error) {
+      throw RpcExceptionHandler.handle(error);
+    }
+  }
+
   private formatProduct(product: any) {
     return {
       id: product.id,
@@ -351,6 +424,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
       description: product.description,
       categoryId: product.categoryId,
       unit: product.unit,
+      stock: product.stock?.toNumber() ?? 0,
       category: product.category
         ? {
             id: product.category.id,
