@@ -1,9 +1,15 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 import { RpcExceptionHandler } from 'src/common';
-import { CreateProductDto, UpdateProductDto, FindAllProductsDto, FindOneProductDto } from './dto';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  FindAllProductsDto,
+  FindOneProductDto,
+  UpdateStockDto,
+} from './dto';
 import { OpenAiService } from './openai.service';
 
 @Injectable()
@@ -26,11 +32,12 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
 
   async create(data: CreateProductDto) {
     try {
-      const { allergenIds, ...productData } = data;
+      const { allergenIds, stock, ...productData } = data;
 
       const product = await this.product.create({
         data: {
           ...productData,
+          stock: stock ? new Prisma.Decimal(stock) : new Prisma.Decimal(0),
           allergens: allergenIds
             ? {
                 create: allergenIds.map((allergenId) => ({
@@ -128,7 +135,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
 
   async update(id: string, data: UpdateProductDto) {
     try {
-      const { allergenIds, ...productData } = data;
+      const { allergenIds, stock, ...productData } = data;
 
       // Si se proporcionan alérgenos, reemplazar los existentes
       if (allergenIds) {
@@ -141,6 +148,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
         where: { id },
         data: {
           ...productData,
+          stock: stock !== undefined ? new Prisma.Decimal(stock) : undefined,
           allergens: allergenIds
             ? {
                 create: allergenIds.map((allergenId) => ({
@@ -343,6 +351,100 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
     };
   }
 
+  /**
+   * Actualiza el stock de uno o varios productos
+   * Usado por el flujo de análisis de documentos para actualizar inventario
+   * Utiliza transacciones para garantizar consistencia de datos
+   */
+  async updateStock(data: UpdateStockDto | UpdateStockDto[]) {
+    try {
+      const items = Array.isArray(data) ? data : [data];
+
+      // 1. Obtener todos los productos en una sola consulta
+      const products = await this.product.findMany({
+        where: {
+          id: { in: items.map((item) => item.productId) },
+        },
+      });
+
+      const productMap = new Map(products.map((p) => [p.id, p]));
+
+      // 2. Separar items válidos de los que no tienen producto
+      const validItems: { item: UpdateStockDto; product: (typeof products)[0] }[] = [];
+      const missingResults: {
+        productId: string;
+        newStock: number;
+        success: boolean;
+        error?: string;
+      }[] = [];
+
+      for (const item of items) {
+        const product = productMap.get(item.productId);
+        if (product) {
+          validItems.push({ item, product });
+        } else {
+          missingResults.push({
+            productId: item.productId,
+            newStock: 0,
+            success: false,
+            error: 'Product not found',
+          });
+        }
+      }
+
+      // Si no hay items válidos, retornar solo los errores
+      if (validItems.length === 0) {
+        return {
+          success: false,
+          results: missingResults,
+        };
+      }
+
+      // 3. Preparar operaciones de actualización
+      const updateOps = validItems.map(({ item, product }) => {
+        const currentStock = product.stock.toNumber();
+        const newStock = Math.max(0, currentStock + item.quantity);
+
+        return this.product.update({
+          where: { id: item.productId },
+          data: {
+            stock: new Prisma.Decimal(newStock),
+          },
+        });
+      });
+
+      // 4. Ejecutar todas las actualizaciones en una transacción
+      const updatedProducts = await this.$transaction(updateOps);
+
+      // 5. Logging después de la transacción exitosa
+      const successResults = updatedProducts.map((updated, idx) => {
+        const { item, product } = validItems[idx];
+        const currentStock = product.stock.toNumber();
+        const newStock = updated.stock.toNumber();
+
+        this.logger.log(
+          `📦 Stock updated for product ${item.productId}: ${currentStock} -> ${newStock} (${item.quantity > 0 ? '+' : ''}${item.quantity})`,
+        );
+
+        return {
+          productId: updated.id,
+          newStock,
+          success: true,
+        };
+      });
+
+      // 6. Combinar resultados
+      const allResults = [...successResults, ...missingResults];
+
+      return {
+        success: missingResults.length === 0,
+        results: allResults,
+      };
+    } catch (error) {
+      throw RpcExceptionHandler.handle(error);
+    }
+  }
+
   private formatProduct(product: any) {
     return {
       id: product.id,
@@ -351,6 +453,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
       description: product.description,
       categoryId: product.categoryId,
       unit: product.unit,
+      stock: product.stock?.toNumber() ?? 0,
       category: product.category
         ? {
             id: product.category.id,
