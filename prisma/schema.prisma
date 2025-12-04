@@ -37,20 +37,23 @@ model Allergen {
 
 // Catálogo maestro de productos
 model Product {
-  id          String    @id @default(cuid())
-  name        String    // "Tomate Raf", "Lejía", "Salmón"
-  eanCode     String?   @unique // Código de barras EAN
-  description String?
-  categoryId  String
-  unit        String?   // "kg", "litro", "unidad"
-  stock       Decimal   @default(0) @db.Decimal(10, 2) // Cantidad en inventario
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  name         String
+  eanCode      String?
+  description  String?
+  categoryId   String
+  enterpriseId String
+  unit         String?
+  stock        Decimal   @default(0) @db.Decimal(10, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   category    Category           @relation(fields: [categoryId], references: [id])
   allergens   ProductAllergen[]
 
+  @@unique([eanCode, enterpriseId])
   @@index([categoryId])
+  @@index([enterpriseId])
   @@index([name])
   @@index([eanCode])
 }
