@@ -17,6 +17,10 @@ export class CreateProductDto {
   @IsNotEmpty()
   categoryId!: string;
 
+  @IsUUID()
+  @IsNotEmpty()
+  enterpriseId!: string;
+
   @IsOptional()
   @IsString()
   unit?: string;

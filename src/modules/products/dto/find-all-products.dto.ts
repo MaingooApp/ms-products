@@ -1,6 +1,10 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class FindAllProductsDto {
+  @IsUUID()
+  @IsNotEmpty()
+  enterpriseId!: string;
+
   @IsOptional()
   @IsString()
   search?: string;
