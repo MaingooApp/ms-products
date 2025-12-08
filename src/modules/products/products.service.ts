@@ -64,9 +64,11 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
 
   async findAll(filters: FindAllProductsDto) {
     try {
-      const { search, categoryId, allergenId } = filters;
+      const { search, categoryId, allergenId, enterpriseId } = filters;
 
-      const where: any = {};
+      const where: any = {
+        enterpriseId, // Filtrar por empresa
+      };
 
       if (search) {
         where.OR = [
@@ -111,8 +113,15 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
 
   async findOne(data: FindOneProductDto) {
     try {
-      const product = await this.product.findUnique({
-        where: { id: data.id },
+      const where: any = { id: data.id };
+
+      // Si se proporciona enterpriseId, filtrar también por empresa
+      if (data.enterpriseId) {
+        where.enterpriseId = data.enterpriseId;
+      }
+
+      const product = await this.product.findFirst({
+        where,
         include: {
           category: true,
           allergens: {
@@ -189,14 +198,19 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
    * Busca un producto por nombre o EAN, si no existe lo crea
    * Este método es usado por el flujo de análisis de facturas
    */
-  async findOrCreate(data: { name: string; eanCode?: string; categoryName?: string }) {
+  async findOrCreate(data: {
+    name: string;
+    eanCode?: string;
+    categoryName?: string;
+    enterpriseId: string;
+  }) {
     try {
-      const { name, eanCode, categoryName } = data;
+      const { name, eanCode, categoryName, enterpriseId } = data;
 
-      // 1. Buscar por EAN si se proporciona
+      // 1. Buscar por EAN si se proporciona (dentro de la empresa)
       if (eanCode) {
         const productByEan = await this.product.findFirst({
-          where: { eanCode },
+          where: { eanCode, enterpriseId },
           include: {
             category: true,
             allergens: {
@@ -213,9 +227,10 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
         }
       }
 
-      // 2. Buscar por nombre exacto (insensitive)
+      // 2. Buscar por nombre exacto (insensitive) dentro de la empresa
       const productByName = await this.product.findFirst({
         where: {
+          enterpriseId,
           name: {
             equals: name,
             mode: 'insensitive',
@@ -237,7 +252,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
       }
 
       // 3. Si no existe, crear el producto
-      this.logger.log(`🆕 Creating new product: ${name}`);
+      this.logger.log(`🆕 Creating new product: ${name} for enterprise: ${enterpriseId}`);
 
       // Identificar alérgenos automáticamente con OpenAI
       let allergenIds: string[] = [];
@@ -284,6 +299,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
           name,
           eanCode: eanCode || undefined,
           categoryId,
+          enterpriseId,
           unit: 'Unidad', // Unidad por defecto
           allergens:
             allergenIds.length > 0
@@ -452,6 +468,7 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
       eanCode: product.eanCode,
       description: product.description,
       categoryId: product.categoryId,
+      enterpriseId: product.enterpriseId,
       unit: product.unit,
       stock: product.stock?.toNumber() ?? 0,
       category: product.category

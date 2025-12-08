@@ -41,7 +41,15 @@ export class ProductsController {
   }
 
   @MessagePattern(ProductsSubjects.findOrCreate)
-  findOrCreate(@Payload() data: { name: string; eanCode?: string; categoryName?: string }) {
+  findOrCreate(
+    @Payload()
+    data: {
+      name: string;
+      eanCode?: string;
+      categoryName?: string;
+      enterpriseId: string;
+    },
+  ) {
     return this.productsService.findOrCreate(data);
   }
 
