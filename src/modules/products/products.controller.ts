@@ -48,6 +48,10 @@ export class ProductsController {
       eanCode?: string;
       categoryName?: string;
       enterpriseId: string;
+      unit?: string;
+      unitCount?: string;
+      lastUnitPrice?: number;
+      additionalReference?: string;
     },
   ) {
     return this.productsService.findOrCreate(data);
