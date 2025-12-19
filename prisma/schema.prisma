@@ -37,16 +37,19 @@ model Allergen {
 
 // Catálogo maestro de productos
 model Product {
-  id           String    @id @default(cuid())
-  name         String
-  eanCode      String?
-  description  String?
-  categoryId   String
-  enterpriseId String
-  unit         String?
-  stock        Decimal   @default(0) @db.Decimal(10, 2)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  name                String
+  eanCode             String?
+  description         String?
+  categoryId          String
+  enterpriseId        String
+  unit                String?   // Unidad de medida (kg, ud, litros, etc.)
+  unitCount           String?   // Cantidad por unidad (ej: "12 unidades")
+  stock               Decimal   @default(0) @db.Decimal(10, 2)
+  lastUnitPrice       Decimal?  @db.Decimal(12, 2)  // Último precio unitario conocido
+  additionalReference String?   // Referencia adicional del producto
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   category    Category           @relation(fields: [categoryId], references: [id])
   allergens   ProductAllergen[]

@@ -22,9 +22,22 @@ export class UpdateProductDto {
   unit?: string;
 
   @IsOptional()
+  @IsString()
+  unitCount?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   stock?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lastUnitPrice?: number;
+
+  @IsOptional()
+  @IsString()
+  additionalReference?: string;
 
   @IsOptional()
   @IsUUID('4', { each: true })

@@ -203,9 +203,13 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
     eanCode?: string;
     categoryName?: string;
     enterpriseId: string;
+    unit?: string;
+    unitCount?: string;
+    lastUnitPrice?: number;
+    additionalReference?: string;
   }) {
     try {
-      const { name, eanCode, categoryName, enterpriseId } = data;
+      const { name, eanCode, categoryName, enterpriseId, unit, unitCount, lastUnitPrice, additionalReference } = data;
 
       // 1. Buscar por EAN si se proporciona (dentro de la empresa)
       if (eanCode) {
@@ -300,7 +304,10 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
           eanCode: eanCode || undefined,
           categoryId,
           enterpriseId,
-          unit: 'Unidad', // Unidad por defecto
+          unit: unit || 'Unidad', 
+          unitCount: unitCount || undefined,
+          lastUnitPrice: lastUnitPrice || undefined,
+          additionalReference: additionalReference || undefined,
           allergens:
             allergenIds.length > 0
               ? {
@@ -470,7 +477,10 @@ export class ProductsService extends PrismaClient implements OnModuleInit, OnMod
       categoryId: product.categoryId,
       enterpriseId: product.enterpriseId,
       unit: product.unit,
+      unitCount: product.unitCount,
       stock: product.stock?.toNumber() ?? 0,
+      lastUnitPrice: product.lastUnitPrice?.toNumber() ?? null,
+      additionalReference: product.additionalReference,
       category: product.category
         ? {
             id: product.category.id,

@@ -193,20 +193,20 @@ DESCRIPCIÓN DEL PRODUCTO:
 "${productDescription}"
 
 CÓDIGOS DE ALÉRGENOS (14 alérgenos principales UE):
-- GLUTEN: Cereales con gluten (trigo, centeno, cebada, avena, espelta, kamut)
-- CRUSTACEANS: Crustáceos (gambas, langostinos, cangrejos, langostas)
-- EGGS: Huevos y productos derivados
+- GLU: Cereales con gluten (trigo, centeno, cebada, avena, espelta, kamut)
+- CRU: Crustáceos (gambas, langostinos, cangrejos, langostas)
+- EGG: Huevos y productos derivados
 - FISH: Pescado y productos derivados
-- PEANUTS: Cacahuetes y productos derivados
-- SOYA: Soja y productos derivados
+- PEA: Cacahuetes y productos derivados
+- SOY: Soja y productos derivados
 - MILK: Leche y derivados lácteos (incluida lactosa)
 - NUTS: Frutos de cáscara (almendras, avellanas, nueces, anacardos, pacanas, nueces de Brasil, pistachos, nueces de macadamia)
-- CELERY: Apio y productos derivados
-- MUSTARD: Mostaza y productos derivados
-- SESAME: Granos de sésamo y productos derivados
-- SULPHITES: Dióxido de azufre y sulfitos (>10 mg/kg o 10 mg/litro)
-- LUPIN: Altramuces y productos derivados
-- MOLLUSCS: Moluscos (mejillones, almejas, ostras, caracoles, calamares, pulpos)
+- CEL: Apio y productos derivados
+- MUS: Mostaza y productos derivados
+- SES: Granos de sésamo y productos derivados
+- SUL: Dióxido de azufre y sulfitos (>10 mg/kg o 10 mg/litro)
+- LUP: Altramuces y productos derivados
+- MOL: Moluscos (mejillones, almejas, ostras, caracoles, calamares, pulpos)
 
 INSTRUCCIONES:
 1. Lee cuidadosamente la descripción del producto
@@ -218,14 +218,14 @@ INSTRUCCIONES:
 
 EJEMPLOS:
 - "Aceite de oliva virgen extra" → [] (sin alérgenos)
-- "Pan de trigo integral" → ["GLUTEN"]
+- "Pan de trigo integral" → ["GLU"]
 - "Leche entera pasteurizada" → ["MILK"]
 - "Yogur natural con trozos de nueces" → ["MILK", "NUTS"]
-- "Gambas congeladas" → ["CRUSTACEANS"]
-- "Salsa de soja" → ["SOYA", "GLUTEN"] (la mayoría contiene trigo)
-- "Mayonesa" → ["EGGS", "MUSTARD"]
+- "Gambas congeladas" → ["CRU"]
+- "Salsa de soja" → ["SOY", "GLU"] (la mayoría contiene trigo)
+- "Mayonesa" → ["EGG", "MUS"]
 - "Queso rallado" → ["MILK"]
-- "Harina de trigo" → ["GLUTEN"]
+- "Harina de trigo" → ["GLU"]
 
 Devuelve un JSON con:
 - allergenCodes: Array de códigos de alérgenos detectados (vacío si no hay)
@@ -242,20 +242,20 @@ Devuelve un JSON con:
           items: {
             type: 'string',
             enum: [
-              'GLUTEN',
-              'CRUSTACEANS',
-              'EGGS',
+              'GLU',
+              'CRU',
+              'EGG',
               'FISH',
-              'PEANUTS',
-              'SOYA',
+              'PEA',
+              'SOY',
               'MILK',
               'NUTS',
-              'CELERY',
-              'MUSTARD',
-              'SESAME',
-              'SULPHITES',
-              'LUPIN',
-              'MOLLUSCS',
+              'CEL',
+              'MUS',
+              'SES',
+              'SUL',
+              'LUP',
+              'MOL',
             ],
           },
           description: 'Array of allergen codes present in the product',
